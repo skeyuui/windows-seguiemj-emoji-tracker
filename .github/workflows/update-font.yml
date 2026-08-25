@@ -1,0 +1,124 @@
+name: Version Windows Emoji Font
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-font:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compare Font Hashes
+        id: check_font
+        shell: pwsh
+        run: |
+          Copy-Item "C:\Windows\Fonts\seguiemj.ttf" -Destination "$env:TEMP\seguiemj.ttf"
+          
+          $RunnerFont = Get-FileHash "$env:TEMP\seguiemj.ttf"
+          $RepoFont = Get-FileHash ".\seguiemj.ttf" -ErrorAction SilentlyContinue
+          
+          if ($RunnerFont.Hash -eq $RepoFont.Hash) {
+            echo "Font is identical."
+            echo "changed=false" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "New font detected!"
+            echo "changed=true" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Install FontTools
+        if: steps.check_font.outputs.changed == 'true'
+        run: pip install fonttools
+
+      - name: Extract Font Data (Version & Emojis)
+        if: steps.check_font.outputs.changed == 'true'
+        id: font_data
+        shell: python
+        run: |
+          import os
+          import re
+          from fontTools.ttLib import TTFont
+          
+          old_font_path = "seguiemj.ttf"
+          new_font_path = os.environ['TEMP'] + "\\seguiemj.ttf"
+          
+          new_font = TTFont(new_font_path)
+          font_version = "Version Unknown"
+          
+          for record in new_font['name'].names:
+              if record.nameID == 5:
+                  raw_version = record.toUnicode().strip()
+                  font_version = re.sub(r'[\\/*?:"<>|]', '', raw_version)
+                  break
+          
+          def get_codepoints(font_path):
+              if not os.path.exists(font_path):
+                  return set()
+              font = TTFont(font_path)
+              codepoints = set()
+              for table in font['cmap'].tables:
+                  codepoints.update(table.cmap.keys())
+              return codepoints
+              
+          old_cp = get_codepoints(old_font_path)
+          new_cp = get_codepoints(new_font_path)
+          
+          added = new_cp - old_cp
+          
+          diff_string = ""
+          if added:
+              added_emojis = [c for c in added if c > 0x2000]
+              diff_string = "".join([chr(c) for c in added_emojis])
+          
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+              f.write(f"font_version={font_version}\n")
+              f.write("new_emojis<<EOF\n")
+              f.write(f"{diff_string}\n")
+              f.write("EOF\n")
+
+      - name: Archive and Commit New Font
+        if: steps.check_font.outputs.changed == 'true'
+        env:
+          FONT_VERSION: ${{ steps.font_data.outputs.font_version }}
+          NEW_EMOJIS: ${{ steps.font_data.outputs.new_emojis }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ".\archive" | Out-Null
+          
+          $SafeVersion = $env:FONT_VERSION
+          if (-not $SafeVersion) { $SafeVersion = "Version Unknown" }
+          
+          $FileSafeVersion = $SafeVersion -replace ' ', '_'
+          $DateStr = Get-Date -Format "yyyy-MM-dd"
+          $ArchiveFileName = "seguiemj_${FileSafeVersion}_${DateStr}.ttf"
+          
+          Copy-Item "$env:TEMP\seguiemj.ttf" -Destination ".\archive\$ArchiveFileName"
+          Copy-Item "$env:TEMP\seguiemj.ttf" -Destination ".\seguiemj.ttf"
+          
+          $NewEmojis = $env:NEW_EMOJIS
+          $CommitMsg = "Update seguiemj.ttf to $SafeVersion ($DateStr)"
+          
+          if ($NewEmojis) {
+            $CommitMsg = "$CommitMsg`n`nAdded: $NewEmojis"
+            Add-Content -Path "CHANGELOG.md" -Value "### $SafeVersion ($DateStr)`n**Added:** $NewEmojis`n" -Encoding UTF8
+          }
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global core.autocrlf false
+          
+          git add seguiemj.ttf archive/ CHANGELOG.md
+          git commit -m "$CommitMsg"
+          git push
+
+      - name: Keepalive Workflow
+        if: steps.check_font.outputs.changed == 'false'
+        uses: entepotenz/keep-github-actions-alive-min-dependencies@v1
+        with:
+          TIME_ELAPSED_THRESHOLD_IN_DAYS: 50
