@@ -15,12 +15,20 @@ Whenever Microsoft updates the font with new emojis, the actions bot automatical
 You can see exactly which emojis were added in each version by checking the **[CHANGELOG.md](CHANGELOG.md)** file.
 
 ## How to Install on Windows 10
-To update your system emojis, follow these steps exactly:
 
-1. Download the latest [seguiemj.ttf](https://github.com/skeyuui/windows-seguiemj-emoji-tracker/raw/main/seguiemj.ttf) from this repository.
-2. **Right-click** the downloaded font file.
-3. Select **"Install for all users"** (As admin. Do *not* just click "Install" or double-click it. It must be installed for all users to successfully override the system font).
+### Method 1: Standard Install (might fail)
+1. Download the latest [seguiemj.ttf](https://github.com/skeyuui/windows-seguiemj-emoji-tracker/raw/main/seguiemj.ttf).
+2. **Right-click** the file and click **"Install"** (for current user).
+3. **Right-click** the file again and click **"Install for all users"** (as Administrator).
 4. **Reboot your computer**.
+
+---
+
+### Method 2: Automated Batch Script
+If Windows gives you permission errors, says the file is locked by the system or the emojis still not load:
+1. Download both [seguiemj.ttf](https://github.com/skeyuui/windows-seguiemj-emoji-tracker/raw/main/seguiemj.ttf) and [install.bat](https://github.com/skeyuui/windows-seguiemj-emoji-tracker/raw/main/install.bat) into the **same folder** (e.g., Downloads).
+2. **Right-click `install.bat`** and select **"Run as administrator"**.
+3. **Reboot your computer**.
 
 *Note: Windows Update might overwrite the font with their older version after an update. If that happens, just repeat the steps above.*
 
